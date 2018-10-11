@@ -87,3 +87,11 @@ ENV/
 
 # Rope project settings
 .ropeproject
+
+#vs code
+.vscode/
+**/.vscode/
+
+#data
+/hw2/data/**
+

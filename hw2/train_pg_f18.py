@@ -4,6 +4,8 @@ Adapted for CS294-112 Fall 2017 by Abhishek Gupta and Joshua Achiam
 Adapted for CS294-112 Fall 2018 by Michael Chang and Soroush Nasiriany
 """
 import numpy as np
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 import tensorflow as tf
 import gym
 import logz
@@ -37,9 +39,14 @@ def build_mlp(input_placeholder, output_size, scope, n_layers, size, activation=
 
         Hint: use tf.layers.dense    
     """
-    # YOUR CODE HERE
-    raise NotImplementedError
-    return output_placeholder
+    with tf.variable_scope(scope):
+        input_holder = input_placeholder
+        for h in range(n_layers):
+            next_layer = tf.layers.dense(input_holder, size, activation=activation, use_bias=True)
+            input_holder = next_layer
+        output_layer = tf.layers.dense(input_holder, output_size, activation=output_activation, use_bias=True)
+
+    return output_layer
 
 def pathlength(path):
     return len(path["reward"])
@@ -89,20 +96,25 @@ class Agent(object):
             Placeholders for batch batch observations / actions / advantages in policy gradient 
             loss function.
             See Agent.build_computation_graph for notation
-
+            
+            _no - this tensor should have shape (batch self.size /n/, observation dim)
+            _na - this tensor should have shape (batch self.size /n/, action dim)
+            _n  - this tensor should have shape (batch self.size /n/)
+            
             returns:
                 sy_ob_no: placeholder for observations
                 sy_ac_na: placeholder for actions
                 sy_adv_n: placeholder for advantages
         """
-        raise NotImplementedError
+        #raise NotImplementedError
         sy_ob_no = tf.placeholder(shape=[None, self.ob_dim], name="ob", dtype=tf.float32)
         if self.discrete:
             sy_ac_na = tf.placeholder(shape=[None], name="ac", dtype=tf.int32) 
         else:
             sy_ac_na = tf.placeholder(shape=[None, self.ac_dim], name="ac", dtype=tf.float32) 
         # YOUR CODE HERE
-        sy_adv_n = None
+        sy_adv_n = tf.placeholder(shape=[None], name="adv", dtype=tf.float32)
+
         return sy_ob_no, sy_ac_na, sy_adv_n
 
 
@@ -134,15 +146,17 @@ class Agent(object):
                 Pass in self.n_layers for the 'n_layers' argument, and
                 pass in self.size for the 'size' argument.
         """
-        raise NotImplementedError
         if self.discrete:
+            #output = build_mlp()
             # YOUR_CODE_HERE
-            sy_logits_na = None
+            output = build_mlp(sy_ob_no, self.ac_dim, "", n_layers=self.n_layers, size=self.size)
+            sy_logits_na = output
             return sy_logits_na
         else:
+            output = build_mlp(sy_ob_no, self.ac_dim, "", n_layers=self.n_layers, size=self.size)
             # YOUR_CODE_HERE
-            sy_mean = None
-            sy_logstd = None
+            sy_mean = output
+            sy_logstd = tf.get_variable("log_std", shape=(self.ac_dim,), dtype=tf.float32)
             return (sy_mean, sy_logstd)
 
     #========================================================================================#
@@ -685,15 +699,16 @@ def main():
                 )
         # # Awkward hacky process runs, because Tensorflow does not like
         # # repeatedly calling train_PG in the same thread.
-        p = Process(target=train_func, args=tuple())
-        p.start()
-        processes.append(p)
+        train_func()
+        #p = Process(target=train_func, args=tuple())
+        #p.start()
+        #processes.append(p)
         # if you comment in the line below, then the loop will block 
         # until this process finishes
         # p.join()
 
-    for p in processes:
-        p.join()
+    #for p in processes:
+    #    p.join()
 
 if __name__ == "__main__":
     main()
