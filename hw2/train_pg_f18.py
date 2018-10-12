@@ -5,7 +5,7 @@ Adapted for CS294-112 Fall 2018 by Michael Chang and Soroush Nasiriany
 """
 import numpy as np
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+#os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 import tensorflow as tf
 import gym
 import logz
@@ -186,15 +186,16 @@ class Agent(object):
         
                  This reduces the problem to just sampling z. (Hint: use tf.random_normal!)
         """
-        raise NotImplementedError
         if self.discrete:
             sy_logits_na = policy_parameters
             # YOUR_CODE_HERE
-            sy_sampled_ac = None
+            sy_sampled_ac = tf.multinomial(sy_logits_na, 1)
+            sy_sampled_ac = tf.clip_by_value(sy_sampled_ac, 0, 1)
         else:
             sy_mean, sy_logstd = policy_parameters
+            z = tf.random_normal(sy_mean.shape)
             # YOUR_CODE_HERE
-            sy_sampled_ac = None
+            sy_sampled_ac = sy_mean + sy_logstd * z
         return sy_sampled_ac
 
     #========================================================================================#
@@ -223,15 +224,17 @@ class Agent(object):
                 For the discrete case, use the log probability under a categorical distribution.
                 For the continuous case, use the log probability under a multivariate gaussian.
         """
-        raise NotImplementedError
         if self.discrete:
             sy_logits_na = policy_parameters
             # YOUR_CODE_HERE
-            sy_logprob_n = None
+            dist = tf.distributions.Categorical(sy_logits_na)
+
+            sy_logprob_n = tf.log(dist.prob(sy_ac_na))
         else:
             sy_mean, sy_logstd = policy_parameters
+            dist = tf.distributions.Normal(loc=sy_mean, scale=tf.exp(sy_logstd))
             # YOUR_CODE_HERE
-            sy_logprob_n = None
+            sy_logprob_n = tf.log(dist.prob(sy_ac_na))
         return sy_logprob_n
 
     def build_computation_graph(self):
@@ -272,8 +275,8 @@ class Agent(object):
         #                           ----------PROBLEM 2----------
         # Loss Function and Training Operation
         #========================================================================================#
-        loss = None # YOUR CODE HERE
-        self.update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(loss)
+        self.loss = -tf.reduce_mean(self.sy_logprob_n*self.sy_adv_n)
+        self.update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
 
         #========================================================================================#
         #                           ----------PROBLEM 6----------
@@ -320,9 +323,8 @@ class Agent(object):
             #====================================================================================#
             #                           ----------PROBLEM 3----------
             #====================================================================================#
-            raise NotImplementedError
-            ac = None # YOUR CODE HERE
-            ac = ac[0]
+            ac = self.sess.run(self.sy_sampled_ac, feed_dict={self.sy_ob_no: [ob]})
+            ac = ac[0][0]
             acs.append(ac)
             ob, rew, done, _ = env.step(ac)
             rewards.append(rew)
@@ -405,9 +407,20 @@ class Agent(object):
         """
         # YOUR_CODE_HERE
         if self.reward_to_go:
-            raise NotImplementedError
+            sums = [
+                [np.sum(
+                        np.array([(self.gamma ** idx) * reward for idx, reward in enumerate(path[startind - 1:])])[::-1]
+                    )
+                for startind in range(len(path), 0, -1)][::-1]
+            for path in re_n]
+
+            q_n = np.concatenate(sums)
         else:
-            raise NotImplementedError
+            sums = [np.repeat(
+                np.sum([(self.gamma ** idx) * reward for idx, reward in enumerate(path)]), 
+                len(path))
+                for path in re_n]
+            q_n = np.concatenate(sums)
         return q_n
 
     def compute_advantage(self, ob_no, q_n):
@@ -474,8 +487,10 @@ class Agent(object):
         if self.normalize_advantages:
             # On the next line, implement a trick which is known empirically to reduce variance
             # in policy gradient methods: normalize adv_n to have mean zero and std=1.
-            raise NotImplementedError
-            adv_n = None # YOUR_CODE_HERE
+            adv_n -= np.mean(adv_n) 
+            std = np.std(adv_n)
+            if std != 0:
+                adv_n /= std
         return q_n, adv_n
 
     def update_parameters(self, ob_no, ac_na, q_n, adv_n):
@@ -526,7 +541,12 @@ class Agent(object):
         # and after an update, and then log them below. 
 
         # YOUR_CODE_HERE
-        raise NotImplementedError
+        #ob_no, ac_na, q_n, adv_n
+        dic={self.sy_ob_no: ob_no, self.sy_ac_na: ac_na, self.sy_adv_n: adv_n}
+        #pre_loss = self.sess.run(self.loss, feed_dict=dic)
+        #print(pre_loss)
+        self.sess.run(self.update_op, feed_dict=dic)
+        #post_loss = self.sess.run(self.loss, feed_dict=dic)
 
 
 def train_PG(
@@ -614,6 +634,8 @@ def train_PG(
 
     total_timesteps = 0
     for itr in range(n_iter):
+        if itr == 84:
+            print('85')
         print("********** Iteration %i ************"%itr)
         paths, timesteps_this_batch = agent.sample_trajectories(itr, env)
         total_timesteps += timesteps_this_batch
@@ -643,7 +665,6 @@ def train_PG(
         logz.dump_tabular()
         logz.pickle_tf_vars()
 
-
 def main():
     import argparse
     parser = argparse.ArgumentParser()
@@ -660,8 +681,8 @@ def main():
     parser.add_argument('--nn_baseline', '-bl', action='store_true')
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--n_experiments', '-e', type=int, default=1)
-    parser.add_argument('--n_layers', '-l', type=int, default=2)
-    parser.add_argument('--size', '-s', type=int, default=64)
+    parser.add_argument('--n_layers', '-l', type=int, default=1)
+    parser.add_argument('--size', '-s', type=int, default=32)
     args = parser.parse_args()
 
     if not(os.path.exists('data')):
@@ -697,6 +718,7 @@ def main():
                 n_layers=args.n_layers,
                 size=args.size
                 )
+
         # # Awkward hacky process runs, because Tensorflow does not like
         # # repeatedly calling train_PG in the same thread.
         train_func()
@@ -705,10 +727,10 @@ def main():
         #processes.append(p)
         # if you comment in the line below, then the loop will block 
         # until this process finishes
-        # p.join()
+        #p.join()
 
     #for p in processes:
-    #    p.join()
+        #p.join()
 
 if __name__ == "__main__":
     main()
