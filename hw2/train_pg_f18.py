@@ -5,7 +5,7 @@ Adapted for CS294-112 Fall 2018 by Michael Chang and Soroush Nasiriany
 """
 import numpy as np
 import os
-#os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 import tensorflow as tf
 import gym
 import logz
@@ -275,6 +275,7 @@ class Agent(object):
         #                           ----------PROBLEM 2----------
         # Loss Function and Training Operation
         #========================================================================================#
+
         self.loss = -tf.reduce_mean(self.sy_logprob_n*self.sy_adv_n)
         self.update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
 
@@ -286,16 +287,16 @@ class Agent(object):
         # neural network baseline. These will be used to fit the neural network baseline. 
         #========================================================================================#
         if self.nn_baseline:
-            raise NotImplementedError
             self.baseline_prediction = tf.squeeze(build_mlp(
                                     self.sy_ob_no, 
                                     1, 
                                     "nn_baseline",
                                     n_layers=self.n_layers,
                                     size=self.size))
+
             # YOUR_CODE_HERE
-            self.sy_target_n = None
-            baseline_loss = None
+            self.sy_target_n = self.sy_adv_n
+            baseline_loss = tf.reduce_mean(tf.squared_difference(self.baseline_prediction, self.sy_target_n))
             self.baseline_update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(baseline_loss)
 
     def sample_trajectories(self, itr, env):
@@ -452,8 +453,18 @@ class Agent(object):
             # Hint #bl1: rescale the output from the nn_baseline to match the statistics
             # (mean and std) of the current batch of Q-values. (Goes with Hint
             # #bl2 in Agent.update_parameters.
-            raise NotImplementedError
-            b_n = None # YOUR CODE HERE
+            
+            b_n = self.sess.run(self.baseline_prediction, feed_dict={self.sy_ob_no:ob_no}) # YOUR CODE HERE
+            b_n = b_n - np.mean(b_n)
+            std = np.std(b_n)
+            if std != 0:
+                b_n /= std
+            stdq = np.std(q_n)
+            if stdq != 0:
+                b_n *= stdq
+
+            b_n += np.mean(q_n)
+            
             adv_n = q_n - b_n
         else:
             adv_n = q_n.copy()
@@ -526,8 +537,11 @@ class Agent(object):
             # Agent.compute_advantage.)
 
             # YOUR_CODE_HERE
-            raise NotImplementedError
-            target_n = None 
+            target_n =  q_n - np.mean(q_n)
+            std = np.std(target_n)
+            if std != 0:
+                target_n /= std
+            self.sess.run(self.baseline_update_op, feed_dict={self.sy_ob_no: ob_no, self.sy_adv_n:target_n})
 
         #====================================================================================#
         #                           ----------PROBLEM 3----------
