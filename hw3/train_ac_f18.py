@@ -379,7 +379,7 @@ class Agent(object):
 
         for u_step in range(self.num_target_updates):
             for g_step in range(self.num_grad_steps_per_target_update):
-                self.sess.run(self.critic_update_op, feed_dict={self.sy_ob_no: qs})
+                self.sess.run(self.critic_update_op, feed_dict={self.sy_ob_no: ob_no, self.sy_target_n: qs})
             vs = self.sess.run(self.critic_prediction, feed_dict={self.sy_ob_no:next_ob_no})
             qs = re_n + self.gamma *  vs * (1-terminal_n)
 
@@ -505,7 +505,7 @@ def train_AC(
         # (3) use the estimated advantage values to update the actor, by calling agent.update_actor
         # YOUR CODE HERE
         agent.update_critic(ob_no, next_ob_no, re_n, terminal_n)
-        adv_n = agent.estimate_advantage(ob_no, next_ob_no, re_n)
+        adv_n = agent.estimate_advantage(ob_no, next_ob_no, re_n, terminal_n)
         agent.update_actor(ob_no, ac_na, adv_n)
         # Log diagnostics
         returns = [path["reward"].sum() for path in paths]
@@ -579,18 +579,18 @@ def main():
                 n_layers=args.n_layers,
                 size=args.size
                 )
-        train_func()
+        #train_func()
         # # Awkward hacky process runs, because Tensorflow does not like
         # # repeatedly calling train_AC in the same thread.
-        #p = Process(target=train_func, args=tuple())
-        #p.start()
-        #processes.append(p)
+        p = Process(target=train_func, args=tuple())
+        p.start()
+        processes.append(p)
         # if you comment in the line below, then the loop will block 
         # until this process finishes
         # p.join()
 
-    #for p in processes:
-    #    p.join()
+    for p in processes:
+        p.join()
         
 
 if __name__ == "__main__":
