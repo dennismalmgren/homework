@@ -157,9 +157,32 @@ class QLearner(object):
     # Older versions of TensorFlow may require using "VARIABLES" instead of "GLOBAL_VARIABLES"
     # Tip: use huber_loss (from dqn_utils) instead of squared error when defining self.total_error
     ######
+    # use obs_t_float ?
+    # use obs_tp1_float ?
+
+    #sj = self.obs_t_ph
+    #aj = self.act_t_ph
+    #sj1 = self.obs_tp1_ph
+    #rj = self.rew_t_ph
 
     # YOUR CODE HERE
+    #construct q-function
+    qfunc_predict = q_func(obs_t_float, num_actions, scope="q_func_predict", reuse=False)
+    if double_q:
+        qfunc_target = q_func(obs_tp1_float, num_actions, scope="q_func_target", reuse=False)
+    else:
+        qfunc_target = q_func(obs_tp1_float, num_actions, scope="q_func_predict", reuse=True)
 
+    yj = self.rew_t_ph + gamma * tf.reduce_max(qfunc)
+    predict = qfunc_predict - qfunc_target
+
+    self.q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='q_func_predict')
+    if double_q:
+        self.target_q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='q_func_target')
+    else:
+        self.target_q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='q_func_predict')
+
+    self.total_error = predict - yj
     ######
 
     # construct optimization op (with gradient clipping)
