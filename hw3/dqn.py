@@ -188,7 +188,7 @@ class QLearner(object):
 
 
     #self.q_val_predict = tf.slice(self.qfunc_predict, [:, self.act_t_ph], [1])
-    self.total_error = huber_loss(self.q_val_predict - self.yj)
+    self.total_error = tf.reduce_sum(self.q_val_predict - self.yj)
 
     ######
 
