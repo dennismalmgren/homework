@@ -85,8 +85,10 @@ class ModelBasedRL(object):
         losses = []
         ### PROBLEM 1
         ### YOUR CODE HERE
-        raise NotImplementedError
-
+        for epoch in range(self._training_epochs):
+            for states, actions, next_states, rewards, dones in dataset.random_iterator(self._training_batch_size):
+                loss = self._policy.train_step(states, actions, next_states)
+                losses.append(loss)
         logger.record_tabular('TrainingLossStart', losses[0])
         logger.record_tabular('TrainingLossFinal', losses[-1])
 
@@ -116,8 +118,9 @@ class ModelBasedRL(object):
         """
         logger.info('Training policy....')
         ### PROBLEM 1
-        ### YOUR CODE HERE
-        raise NotImplementedError
+        ### YOUR CODE HERE        
+        self._train_policy(self._random_dataset)
+        logger.dump_tabular(print_func=logger.info)
 
         logger.info('Evaluating predictions...')
         for r_num, (states, actions, _, _, _) in enumerate(self._random_dataset.rollout_iterator()):
@@ -125,10 +128,15 @@ class ModelBasedRL(object):
 
             ### PROBLEM 1
             ### YOUR CODE HERE
-            raise NotImplementedError
+            pred_state = states[0]
+            pred_states.append(pred_state)
 
-            states = np.asarray(states)
-            pred_states = np.asarray(pred_states)
+            for id in range(actions.shape[0] - 1):
+                pred_state = self._policy.predict(pred_state, actions[id])
+                pred_states.append(pred_state)
+
+            states = np.asarray(states[0:20])
+            pred_states = np.asarray(pred_states[0:20])
 
             state_dim = states.shape[1]
             rows = int(np.sqrt(state_dim))
@@ -139,6 +147,7 @@ class ModelBasedRL(object):
                 ax.set_title('state {0}'.format(i))
                 ax.plot(state_i, color='k')
                 ax.plot(pred_state_i, color='r')
+                ax.set_ylim((-2, 2))
             plt.tight_layout()
             plt.subplots_adjust(top=0.90)
             f.savefig(os.path.join(logger.dir, 'prediction_{0:03d}.jpg'.format(r_num)), bbox_inches='tight')
@@ -155,12 +164,15 @@ class ModelBasedRL(object):
         logger.info('Training policy....')
         ### PROBLEM 2
         ### YOUR CODE HERE
-        raise NotImplementedError
+
+        self._train_policy(self._random_dataset)
+
 
         logger.info('Evaluating policy...')
         ### PROBLEM 2
         ### YOUR CODE HERE
-        raise NotImplementedError
+        eval_dataset = self._gather_rollouts(self._policy,
+                                                     10)
 
         logger.info('Trained policy')
         self._log(eval_dataset)
@@ -184,16 +196,16 @@ class ModelBasedRL(object):
             ### PROBLEM 3
             ### YOUR CODE HERE
             logger.info('Training policy...')
-            raise NotImplementedError
+            self._train_policy(dataset)
 
             ### PROBLEM 3
             ### YOUR CODE HERE
             logger.info('Gathering rollouts...')
-            raise NotImplementedError
-
+            new_dataset = self._gather_rollouts(self._policy,
+                                                     10)
             ### PROBLEM 3
             ### YOUR CODE HERE
             logger.info('Appending dataset...')
-            raise NotImplementedError
+            dataset.append(new_dataset)
 
             self._log(new_dataset)

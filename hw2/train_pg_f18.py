@@ -48,6 +48,33 @@ def build_mlp(input_placeholder, output_size, scope, n_layers, size, activation=
 
     return output_layer
 
+def build_rnn(input_placeholder, output_size, scope, n_layers, size, activation=tf.tanh, output_activation=None):
+    """
+        Builds a feedforward neural network
+        
+        arguments:
+            input_placeholder: placeholder variable for the state (batch_size, input_size)
+            output_size: size of the output layer
+            scope: variable scope of the network
+            n_layers: number of hidden layers
+            size: dimension of the hidden layer
+            activation: activation of the hidden layers
+            output_activation: activation of the ouput layers
+
+        returns:
+            output placeholder of the network (the result of a forward pass) 
+
+        Hint: use tf.layers.dense    
+    """
+    with tf.variable_scope(scope):
+        input_holder = input_placeholder
+        for h in range(n_layers):
+            next_layer = tf.layers.dense(input_holder, size, activation=activation, use_bias=True)
+            input_holder = next_layer
+        output_layer = tf.layers.dense(input_holder, output_size, activation=output_activation, use_bias=True)
+
+    return output_layer
+
 def pathlength(path):
     return len(path["reward"])
 
@@ -147,15 +174,13 @@ class Agent(object):
                 pass in self.size for the 'size' argument.
         """
         if self.discrete:
-            #output = build_mlp()
             # YOUR_CODE_HERE
             output = build_mlp(sy_ob_no, self.ac_dim, "", n_layers=self.n_layers, size=self.size)
             sy_logits_na = output
             return sy_logits_na
         else:
-            output = build_mlp(sy_ob_no, self.ac_dim, "", n_layers=self.n_layers, size=self.size)
             # YOUR_CODE_HERE
-            sy_mean = output
+            sy_mean = build_mlp(sy_ob_no, self.ac_dim, "", n_layers=self.n_layers, size=self.size)
             sy_logstd = tf.get_variable("log_std", shape=(self.ac_dim,), dtype=tf.float32)
             return (sy_mean, sy_logstd)
 
@@ -193,7 +218,7 @@ class Agent(object):
             sy_sampled_ac = tf.clip_by_value(sy_sampled_ac, 0, 1)
         else:
             sy_mean, sy_logstd = policy_parameters
-            z = tf.random_normal(sy_mean.shape)
+            z = tf.random_normal(tf.shape(sy_mean))
             # YOUR_CODE_HERE
             sy_sampled_ac = sy_mean + sy_logstd * z
         return sy_sampled_ac
@@ -229,12 +254,14 @@ class Agent(object):
             # YOUR_CODE_HERE
             dist = tf.distributions.Categorical(sy_logits_na)
 
-            sy_logprob_n = tf.log(dist.prob(sy_ac_na))
+            sy_logprob_n = dist.log_prob(sy_ac_na)
         else:
             sy_mean, sy_logstd = policy_parameters
-            dist = tf.distributions.Normal(loc=sy_mean, scale=tf.exp(sy_logstd))
+            dist = tf.contrib.distributions.MultivariateNormalDiag(loc=sy_mean,
+                    scale_identity_multiplier=tf.exp(sy_logstd))
+            #dist = tf.distributions.Normal(loc=sy_mean, scale=tf.exp(sy_logstd))
             # YOUR_CODE_HERE
-            sy_logprob_n = tf.log(dist.prob(sy_ac_na))
+            sy_logprob_n = dist.log_prob(sy_ac_na)
         return sy_logprob_n
 
     def build_computation_graph(self):
@@ -556,10 +583,17 @@ class Agent(object):
 
         # YOUR_CODE_HERE
         #ob_no, ac_na, q_n, adv_n
-        dic={self.sy_ob_no: ob_no, self.sy_ac_na: ac_na, self.sy_adv_n: adv_n}
-        #pre_loss = self.sess.run(self.loss, feed_dict=dic)
-        #print(pre_loss)
-        self.sess.run(self.update_op, feed_dict=dic)
+        
+#        pre_loss = self.sess.run(self.loss, feed_dict=dic)
+#        print(pre_loss)
+        ac_na_reshaped = np.reshape(ac_na, [ac_na.shape[0], self.ac_dim])
+        if self.discrete:
+            dic={self.sy_ob_no: ob_no, self.sy_ac_na: ac_na, self.sy_adv_n: adv_n}
+            self.sess.run(self.update_op, feed_dict=dic)
+        else:
+            dic={self.sy_ob_no: ob_no, self.sy_ac_na: ac_na_reshaped, self.sy_adv_n: adv_n}
+            self.sess.run(self.update_op, feed_dict=dic)
+
         #post_loss = self.sess.run(self.loss, feed_dict=dic)
 
 
@@ -648,8 +682,6 @@ def train_PG(
 
     total_timesteps = 0
     for itr in range(n_iter):
-        if itr == 84:
-            print('85')
         print("********** Iteration %i ************"%itr)
         paths, timesteps_this_batch = agent.sample_trajectories(itr, env)
         total_timesteps += timesteps_this_batch
@@ -693,7 +725,7 @@ def main():
     parser.add_argument('--reward_to_go', '-rtg', action='store_true')
     parser.add_argument('--dont_normalize_advantages', '-dna', action='store_true')
     parser.add_argument('--nn_baseline', '-bl', action='store_true')
-    parser.add_argument('--seed', type=int, default=1)
+    parser.add_argument('--seed', type=int, default=2)
     parser.add_argument('--n_experiments', '-e', type=int, default=1)
     parser.add_argument('--n_layers', '-l', type=int, default=1)
     parser.add_argument('--size', '-s', type=int, default=32)

@@ -98,4 +98,5 @@ ENV/
 /hw3/data/**
 /hw4/data/**
 
+**/*.pkl
 

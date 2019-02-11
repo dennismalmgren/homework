@@ -103,8 +103,8 @@ def get_session():
     print("AVAILABLE GPUS: ", get_available_gpus())
     return session
 
-def get_env(task, seed):
-    env = gym.make('PongNoFrameskip-v4')
+def get_env(env, seed):
+    #env = gym.make('PongNoFrameskip-v4')
 
     set_global_seeds(seed)
     env.seed(seed)
