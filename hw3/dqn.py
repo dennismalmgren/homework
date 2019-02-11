@@ -250,6 +250,8 @@ class QLearner(object):
     # might as well be random, since you haven't trained your net...)
 
     #####
+    
+    obs, reward, done, info = env.step(action)
 
     # YOUR CODE HERE
 
